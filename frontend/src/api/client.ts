@@ -172,10 +172,12 @@ export const api = {
   },
 
   // Orders
-  async getOrders(params?: { status?: string; search?: string }) {
+  async getOrders(params?: { status?: string; search?: string; date_from?: string; date_to?: string }) {
     const url = new URL(`${API_BASE}/orders`);
     if (params?.status) url.searchParams.append('status', params.status);
     if (params?.search) url.searchParams.append('search', params.search);
+    if (params?.date_from) url.searchParams.append('date_from', params.date_from);
+    if (params?.date_to) url.searchParams.append('date_to', params.date_to);
     const res = await fetch(url.toString());
     return handleResponse<OrderListItem[]>(res);
   },

@@ -167,3 +167,33 @@ def test_insufficient_stock_rejection(client, db_session):
     # Stock must remain unchanged at 5
     p_check = client.get(f"/api/products/{prod_id}").json()
     assert Decimal(str(p_check["stock_quantity"])) == Decimal("5.00")
+
+
+def test_order_date_filtering(client):
+    from datetime import datetime, timezone
+
+    # Create customer and product
+    prod = client.post("/api/products", json={"sku": "FILTER-01", "name": "Filter Item", "selling_price": 100, "stock_quantity": 20}).json()
+    cust = client.post("/api/customers", json={"name": "Filter Customer"}).json()
+
+    # Create order
+    order = client.post("/api/orders", json={
+        "customer_id": cust["id"],
+        "status": "APPROVED",
+        "items": [{"product_id": prod["id"], "product_name": "Filter Item", "quantity": 1, "unit_price": 100}]
+    }).json()
+
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # Match today
+    res_today = client.get(f"/api/orders?date_from={today_str}&date_to={today_str}").json()
+    assert any(o["id"] == order["id"] for o in res_today)
+
+    # Future date filter should return 0 matches for this order
+    res_future = client.get("/api/orders?date_from=2030-01-01").json()
+    assert not any(o["id"] == order["id"] for o in res_future)
+
+    # Past date filter should return 0 matches for this order
+    res_past = client.get("/api/orders?date_to=2020-01-01").json()
+    assert not any(o["id"] == order["id"] for o in res_past)
+

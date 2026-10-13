@@ -1,5 +1,6 @@
 import csv
 import io
+from datetime import datetime
 from typing import List, Optional
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -68,6 +69,8 @@ def order_to_out(o: Order) -> OrderOut:
 def list_orders(
     status_filter: Optional[str] = Query(None, alias="status"),
     search: Optional[str] = None,
+    date_from: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)"),
     db: Session = Depends(get_db),
 ):
     query = db.query(Order)
@@ -88,6 +91,20 @@ def list_orders(
                 Customer.business_name.ilike(term),
             )
         )
+
+    if date_from and date_from.strip():
+        try:
+            dt_from = datetime.strptime(date_from.strip(), "%Y-%m-%d")
+            query = query.filter(Order.created_at >= dt_from)
+        except ValueError:
+            pass
+
+    if date_to and date_to.strip():
+        try:
+            dt_to = datetime.strptime(date_to.strip(), "%Y-%m-%d").replace(hour=23, minute=59, second=59, microsecond=999999)
+            query = query.filter(Order.created_at <= dt_to)
+        except ValueError:
+            pass
 
     orders = query.order_by(Order.created_at.desc()).all()
 

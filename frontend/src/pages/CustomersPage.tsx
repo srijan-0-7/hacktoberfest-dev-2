@@ -12,15 +12,19 @@ import {
   ArrowRight,
   Phone,
   Store,
+  Edit3,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Customer } from '../types';
 import { AddCustomerModal } from '../components/AddCustomerModal';
+import { EditCustomerModal } from '../components/EditCustomerModal';
 import { RecordPaymentModal } from '../components/RecordPaymentModal';
 
 export const CustomersPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [selectedPaymentCustId, setSelectedPaymentCustId] = useState<number | undefined>(undefined);
+  const [selectedEditCustomer, setSelectedEditCustomer] = useState<Customer | null>(null);
 
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ['customers', search],
@@ -157,6 +161,13 @@ export const CustomersPage: React.FC = () => {
                       <td className="py-3 px-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
+                            onClick={() => setSelectedEditCustomer(c)}
+                            className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Edit Customer Profile"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
                             onClick={() => setSelectedPaymentCustId(c.id)}
                             className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-semibold rounded-lg transition-colors"
                             title="Record Payment"
@@ -185,6 +196,11 @@ export const CustomersPage: React.FC = () => {
 
       {/* Modals */}
       <AddCustomerModal isOpen={addModalOpen} onClose={() => setAddModalOpen(false)} />
+      <EditCustomerModal
+        isOpen={selectedEditCustomer !== null}
+        onClose={() => setSelectedEditCustomer(null)}
+        customer={selectedEditCustomer}
+      />
       <RecordPaymentModal
         isOpen={selectedPaymentCustId !== undefined}
         onClose={() => setSelectedPaymentCustId(undefined)}

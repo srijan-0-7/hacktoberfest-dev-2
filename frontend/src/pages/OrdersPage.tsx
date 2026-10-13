@@ -14,9 +14,14 @@ import {
   ArrowRight,
   Clock,
   Layers,
+  Calendar,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { InvoiceModal } from '../components/InvoiceModal';
+
+function toYMD(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
 
 export const OrdersPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -25,9 +30,40 @@ export const OrdersPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
 
+  const [datePreset, setDatePreset] = useState<'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'CUSTOM'>('ALL');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  const handleDatePreset = (preset: 'ALL' | 'TODAY' | 'WEEK' | 'MONTH' | 'CUSTOM') => {
+    setDatePreset(preset);
+    const now = new Date();
+    if (preset === 'ALL') {
+      setDateFrom('');
+      setDateTo('');
+    } else if (preset === 'TODAY') {
+      const today = toYMD(now);
+      setDateFrom(today);
+      setDateTo(today);
+    } else if (preset === 'WEEK') {
+      const past = new Date(Date.now() - 7 * 86400000);
+      setDateFrom(toYMD(past));
+      setDateTo(toYMD(now));
+    } else if (preset === 'MONTH') {
+      const past = new Date(Date.now() - 30 * 86400000);
+      setDateFrom(toYMD(past));
+      setDateTo(toYMD(now));
+    }
+  };
+
   const { data: orders = [], isLoading } = useQuery({
-    queryKey: ['orders', statusParam, search],
-    queryFn: () => api.getOrders({ status: statusParam === 'ALL' ? undefined : statusParam, search: search || undefined }),
+    queryKey: ['orders', statusParam, search, dateFrom, dateTo],
+    queryFn: () =>
+      api.getOrders({
+        status: statusParam === 'ALL' ? undefined : statusParam,
+        search: search || undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+      }),
   });
 
   const approveMutation = useMutation({
@@ -121,6 +157,75 @@ export const OrdersPage: React.FC = () => {
               className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
             />
           </div>
+        </div>
+
+        {/* Date Filter Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 mr-1">
+              <Calendar className="w-3.5 h-3.5 text-slate-400" />
+              <span>Date:</span>
+            </span>
+            {(
+              [
+                { id: 'ALL', label: 'All Time' },
+                { id: 'TODAY', label: 'Today' },
+                { id: 'WEEK', label: 'Last 7 Days' },
+                { id: 'MONTH', label: 'Last 30 Days' },
+                { id: 'CUSTOM', label: 'Custom' },
+              ] as const
+            ).map((p) => {
+              const active = datePreset === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => handleDatePreset(p.id)}
+                  className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-colors ${
+                    active
+                      ? 'bg-emerald-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {datePreset === 'CUSTOM' && (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-400 uppercase font-medium">From:</span>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="px-2 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-slate-400 uppercase font-medium">To:</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="px-2 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+              {(dateFrom || dateTo) && (
+                <button
+                  onClick={() => {
+                    setDateFrom('');
+                    setDateTo('');
+                    setDatePreset('ALL');
+                  }}
+                  className="text-[10px] text-slate-400 hover:text-rose-600 underline font-medium"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Orders Table */}

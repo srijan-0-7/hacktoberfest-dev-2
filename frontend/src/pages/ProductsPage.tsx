@@ -12,9 +12,11 @@ import {
   Archive,
   Tag,
   CheckCircle2,
+  Edit3,
 } from 'lucide-react';
 import { Product } from '../types';
 import { AddProductModal } from '../components/AddProductModal';
+import { EditProductModal } from '../components/EditProductModal';
 import { StockAdjustmentModal } from '../components/StockAdjustmentModal';
 
 export const ProductsPage: React.FC = () => {
@@ -25,6 +27,7 @@ export const ProductsPage: React.FC = () => {
 
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [selectedAdjustProduct, setSelectedAdjustProduct] = useState<Product | null>(null);
+  const [selectedEditProduct, setSelectedEditProduct] = useState<Product | null>(null);
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['products', search, categoryFilter, lowStockFilter],
@@ -220,6 +223,13 @@ export const ProductsPage: React.FC = () => {
                       <td className="py-3 px-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
+                            onClick={() => setSelectedEditProduct(p)}
+                            className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Edit product specifications"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
                             onClick={() => setSelectedAdjustProduct(p)}
                             className="flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[11px] font-semibold rounded-lg transition-colors"
                             title="Adjust inventory with reason"
@@ -251,6 +261,11 @@ export const ProductsPage: React.FC = () => {
 
       {/* Modals */}
       <AddProductModal isOpen={addModalOpen} onClose={() => setAddModalOpen(false)} />
+      <EditProductModal
+        isOpen={selectedEditProduct !== null}
+        onClose={() => setSelectedEditProduct(null)}
+        product={selectedEditProduct}
+      />
       <StockAdjustmentModal
         isOpen={selectedAdjustProduct !== null}
         onClose={() => setSelectedAdjustProduct(null)}
