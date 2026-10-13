@@ -70,58 +70,68 @@ Format response strictly as JSON with this exact structure:
   "overall_needs_review": true
 }}"""
 
-        url = f"{self.base_url}/models/{self.model_name}:generateContent?key={self.api_key.strip()}"
-        payload = {
-            "system_instruction": {
-                "parts": [{"text": system_instruction}]
-            },
-            "contents": [
-                {"parts": [{"text": user_prompt}]}
-            ],
-            "generationConfig": {
-                "response_mime_type": "application/json",
-                "temperature": 0.1,
+        models_to_try = [self.model_name]
+        for alt in ["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.5-flash"]:
+            if alt not in models_to_try:
+                models_to_try.append(alt)
+
+        last_error = None
+        for model in models_to_try:
+            url = f"{self.base_url}/models/{model}:generateContent?key={self.api_key.strip()}"
+            payload = {
+                "system_instruction": {
+                    "parts": [{"text": system_instruction}]
+                },
+                "contents": [
+                    {"parts": [{"text": user_prompt}]}
+                ],
+                "generationConfig": {
+                    "response_mime_type": "application/json",
+                    "temperature": 0.1,
+                }
             }
-        }
 
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                res = await client.post(url, json=payload)
-                if res.status_code == 200:
-                    data = res.json()
-                    candidates = data.get("candidates", [])
-                    if not candidates:
-                        raise ValueError("No candidates returned from Gemini model")
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    res = await client.post(url, json=payload)
+                    if res.status_code == 200:
+                        data = res.json()
+                        candidates = data.get("candidates", [])
+                        if not candidates:
+                            raise ValueError("No candidates returned from Gemini model")
 
-                    parts = candidates[0].get("content", {}).get("parts", [])
-                    if not parts:
-                        raise ValueError("Empty response parts from Gemini model")
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if not parts:
+                            raise ValueError("Empty response parts from Gemini model")
 
-                    raw_text = parts[0].get("text", "").strip()
-                    if raw_text.startswith("```json"):
-                        raw_text = raw_text[7:]
-                    if raw_text.startswith("```"):
-                        raw_text = raw_text[3:]
-                    if raw_text.endswith("```"):
-                        raw_text = raw_text[:-3]
+                        raw_text = parts[0].get("text", "").strip()
+                        if raw_text.startswith("```json"):
+                            raw_text = raw_text[7:]
+                        if raw_text.startswith("```"):
+                            raw_text = raw_text[3:]
+                        if raw_text.endswith("```"):
+                            raw_text = raw_text[:-3]
 
-                    parsed = json.loads(raw_text.strip())
-                    return ExtractionRawLLMOutput.model_validate(parsed)
-                elif res.status_code == 503:
-                    raise RuntimeError("Gemini model is currently experiencing temporary high demand (HTTP 503). Please retry in a moment or use manual entry.")
-                elif res.status_code == 429:
-                    raise RuntimeError("Gemini rate limit exceeded. Please retry in a moment or use manual entry.")
-                else:
-                    err_json = res.json() if res.headers.get("content-type", "").startswith("application/json") else {}
-                    msg = err_json.get("error", {}).get("message", res.text[:120])
-                    raise RuntimeError(f"Gemini API returned error (HTTP {res.status_code}): {msg}")
+                        parsed = json.loads(raw_text.strip())
+                        return ExtractionRawLLMOutput.model_validate(parsed)
+                    elif res.status_code in (503, 404):
+                        # Model overload or version retirement - try next candidate model
+                        last_error = f"Gemini model {model} returned HTTP {res.status_code}"
+                        continue
+                    elif res.status_code == 429:
+                        raise RuntimeError("Gemini rate limit exceeded. Please retry in a moment or use manual entry.")
+                    else:
+                        err_json = res.json() if res.headers.get("content-type", "").startswith("application/json") else {}
+                        msg = err_json.get("error", {}).get("message", res.text[:120])
+                        raise RuntimeError(f"Gemini API returned error (HTTP {res.status_code}): {msg}")
 
-        except httpx.TimeoutException:
-            raise RuntimeError("Gemini request timed out. Please try again or switch to manual entry.")
-        except json.JSONDecodeError as jde:
-            raise ValueError(f"Gemini returned invalid JSON: {str(jde)}")
-        except Exception as e:
-            err_msg = str(e)
-            if self.api_key and self.api_key in err_msg:
-                err_msg = err_msg.replace(self.api_key, "[REDACTED]")
-            raise RuntimeError(err_msg)
+            except httpx.TimeoutException:
+                last_error = f"Gemini request for {model} timed out."
+                continue
+            except json.JSONDecodeError as jde:
+                raise ValueError(f"Gemini returned invalid JSON: {str(jde)}")
+
+        raise RuntimeError(
+            f"Google Gemini models are temporarily experiencing high demand ({last_error or 'HTTP 503'}). "
+            "Please switch to manual order review or configure local Ollama for zero-latency offline inference."
+        )
